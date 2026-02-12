@@ -1,0 +1,833 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HTML → PDF Converter</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500&display=swap');
+
+  :root {
+    --bg: #0e0e0f;
+    --surface: #161618;
+    --border: #2a2a2e;
+    --accent: #7effa0;
+    --accent2: #5be5ff;
+    --text: #e8e8ea;
+    --muted: #6b6b75;
+    --danger: #ff6b6b;
+    --mono: 'IBM Plex Mono', monospace;
+    --sans: 'IBM Plex Sans', sans-serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    padding: 48px 24px;
+  }
+
+  /* grid background */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(var(--border) 1px, transparent 1px),
+      linear-gradient(90deg, var(--border) 1px, transparent 1px);
+    background-size: 40px 40px;
+    opacity: 0.35;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .wrap {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: 680px;
+  }
+
+  /* header */
+  .header {
+    margin-bottom: 40px;
+  }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(126,255,160,0.08);
+    border: 1px solid rgba(126,255,160,0.2);
+    border-radius: 4px;
+    padding: 4px 10px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--accent);
+    letter-spacing: 0.08em;
+    margin-bottom: 18px;
+  }
+
+  .badge-dot {
+    width: 6px; height: 6px;
+    background: var(--accent);
+    border-radius: 50%;
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.4; transform: scale(0.8); }
+  }
+
+  h1 {
+    font-family: var(--mono);
+    font-size: 32px;
+    font-weight: 600;
+    line-height: 1.2;
+    letter-spacing: -0.02em;
+  }
+
+  h1 span { color: var(--accent); }
+
+  .subtitle {
+    margin-top: 10px;
+    color: var(--muted);
+    font-size: 14px;
+    font-weight: 300;
+    line-height: 1.6;
+  }
+
+  /* card */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 28px;
+    margin-bottom: 16px;
+  }
+
+  .card-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .card-label::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  /* drop zone */
+  .dropzone {
+    border: 1.5px dashed var(--border);
+    border-radius: 8px;
+    padding: 40px 24px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative;
+    background: rgba(255,255,255,0.01);
+  }
+
+  .dropzone:hover, .dropzone.drag-over {
+    border-color: var(--accent);
+    background: rgba(126,255,160,0.03);
+  }
+
+  .dropzone.has-file {
+    border-color: rgba(126,255,160,0.4);
+    background: rgba(126,255,160,0.04);
+  }
+
+  .dropzone input {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+    width: 100%;
+    height: 100%;
+  }
+
+  .drop-icon {
+    width: 40px; height: 40px;
+    margin: 0 auto 14px;
+    opacity: 0.3;
+    transition: opacity 0.2s;
+  }
+
+  .dropzone:hover .drop-icon, .dropzone.has-file .drop-icon {
+    opacity: 0.8;
+  }
+
+  .drop-title {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--text);
+    margin-bottom: 6px;
+  }
+
+  .drop-sub {
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  .file-name {
+    display: none;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--accent);
+    margin-top: 12px;
+    justify-content: center;
+  }
+
+  .file-name.visible { display: flex; }
+
+  /* options */
+  .options-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+
+  .opt-group label {
+    display: block;
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 7px;
+  }
+
+  .opt-group select,
+  .opt-group input[type="text"] {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 8px 12px;
+    outline: none;
+    transition: border-color 0.2s;
+    appearance: none;
+  }
+
+  .opt-group select:focus,
+  .opt-group input[type="text"]:focus {
+    border-color: var(--accent2);
+  }
+
+  /* toggle */
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .toggle-row:last-child { border-bottom: none; }
+
+  .toggle-info {
+    flex: 1;
+  }
+
+  .toggle-name {
+    font-size: 13px;
+    color: var(--text);
+    font-weight: 400;
+  }
+
+  .toggle-desc {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+
+  .toggle {
+    position: relative;
+    width: 36px;
+    height: 20px;
+    flex-shrink: 0;
+    margin-left: 16px;
+  }
+
+  .toggle input { opacity: 0; width: 0; height: 0; }
+
+  .toggle-track {
+    position: absolute;
+    inset: 0;
+    background: var(--border);
+    border-radius: 20px;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+
+  .toggle-track::after {
+    content: '';
+    position: absolute;
+    left: 3px; top: 3px;
+    width: 14px; height: 14px;
+    background: var(--muted);
+    border-radius: 50%;
+    transition: all 0.2s;
+  }
+
+  .toggle input:checked + .toggle-track {
+    background: rgba(126,255,160,0.15);
+    border: 1px solid rgba(126,255,160,0.3);
+  }
+
+  .toggle input:checked + .toggle-track::after {
+    left: 17px;
+    background: var(--accent);
+  }
+
+  /* convert btn */
+  .btn-convert {
+    width: 100%;
+    padding: 14px;
+    background: var(--accent);
+    color: #0a1a10;
+    border: none;
+    border-radius: 8px;
+    font-family: var(--mono);
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 4px;
+  }
+
+  .btn-convert:hover:not(:disabled) {
+    background: #9effc0;
+    transform: translateY(-1px);
+    box-shadow: 0 8px 24px rgba(126,255,160,0.2);
+  }
+
+  .btn-convert:disabled {
+    background: var(--border);
+    color: var(--muted);
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  /* progress */
+  .progress-wrap {
+    display: none;
+    margin-top: 20px;
+  }
+
+  .progress-wrap.visible { display: block; }
+
+  .progress-label {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    margin-bottom: 8px;
+    display: flex;
+    justify-content: space-between;
+  }
+
+  .progress-bar-bg {
+    height: 3px;
+    background: var(--border);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+
+  .progress-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    border-radius: 3px;
+    width: 0%;
+    transition: width 0.3s ease;
+  }
+
+  /* log */
+  .log {
+    display: none;
+    margin-top: 16px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 16px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    line-height: 1.8;
+    max-height: 150px;
+    overflow-y: auto;
+  }
+
+  .log.visible { display: block; }
+  .log .ok { color: var(--accent); }
+  .log .info { color: var(--accent2); }
+  .log .err { color: var(--danger); }
+
+  /* how it works */
+  .how {
+    margin-top: 32px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+  }
+
+  .how-step {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    text-align: center;
+  }
+
+  .how-num {
+    font-family: var(--mono);
+    font-size: 22px;
+    font-weight: 600;
+    color: rgba(126,255,160,0.15);
+    line-height: 1;
+    margin-bottom: 8px;
+  }
+
+  .how-text {
+    font-size: 11px;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+
+  /* scrollbar */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="header">
+    <div class="badge"><span class="badge-dot"></span> BROWSER-NATIVE · NO UPLOAD</div>
+    <h1>HTML <span>→</span> PDF</h1>
+    <p class="subtitle">Convert any HTML file to PDF while keeping all hyperlinks fully clickable.<br>Runs entirely in your browser — nothing is sent to a server.</p>
+  </div>
+
+  <!-- File drop -->
+  <div class="card">
+    <div class="card-label">01 — Input file</div>
+    <div class="dropzone" id="dropzone">
+      <input type="file" id="fileInput" accept=".html,.htm">
+      <svg class="drop-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+        <polyline points="14 2 14 8 20 8"/>
+        <line x1="12" y1="12" x2="12" y2="18"/>
+        <polyline points="9 15 12 12 15 15"/>
+      </svg>
+      <div class="drop-title">Drop your HTML file here</div>
+      <div class="drop-sub">or click to browse · .html / .htm</div>
+    </div>
+    <div class="file-name" id="fileName">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <polyline points="20 6 9 17 4 12"/>
+      </svg>
+      <span id="fileNameText"></span>
+    </div>
+  </div>
+
+  <!-- Options -->
+  <div class="card">
+    <div class="card-label">02 — Options</div>
+    <div class="options-grid">
+      <div class="opt-group">
+        <label>Page Size</label>
+        <select id="pageSize">
+          <option value="a4">A4</option>
+          <option value="letter" selected>Letter</option>
+          <option value="legal">Legal</option>
+        </select>
+      </div>
+      <div class="opt-group">
+        <label>Orientation</label>
+        <select id="orientation">
+          <option value="portrait" selected>Portrait</option>
+          <option value="landscape">Landscape</option>
+        </select>
+      </div>
+      <div class="opt-group">
+        <label>Output filename</label>
+        <input type="text" id="outputName" placeholder="output.pdf">
+      </div>
+      <div class="opt-group">
+        <label>Image scale</label>
+        <select id="imgScale">
+          <option value="1">1× (faster)</option>
+          <option value="2" selected>2× (sharp)</option>
+          <option value="3">3× (crisp)</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toggles -->
+  <div class="card">
+    <div class="card-label">03 — Link options</div>
+
+    <div class="toggle-row">
+      <div class="toggle-info">
+        <div class="toggle-name">Preserve hyperlinks</div>
+        <div class="toggle-desc">All &lt;a href&gt; tags become clickable PDF annotations</div>
+      </div>
+      <label class="toggle">
+        <input type="checkbox" id="preserveLinks" checked>
+        <span class="toggle-track"></span>
+      </label>
+    </div>
+
+    <div class="toggle-row">
+      <div class="toggle-info">
+        <div class="toggle-name">Detect bare URLs</div>
+        <div class="toggle-desc">Auto-linkify plain-text URLs found in the page</div>
+      </div>
+      <label class="toggle">
+        <input type="checkbox" id="detectUrls" checked>
+        <span class="toggle-track"></span>
+      </label>
+    </div>
+
+    <div class="toggle-row">
+      <div class="toggle-info">
+        <div class="toggle-name">Open links in new tab</div>
+        <div class="toggle-desc">PDF link annotations target _blank</div>
+      </div>
+      <label class="toggle">
+        <input type="checkbox" id="newTab" checked>
+        <span class="toggle-track"></span>
+      </label>
+    </div>
+  </div>
+
+  <button class="btn-convert" id="convertBtn" disabled>
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+      <polyline points="7 10 12 15 17 10"/>
+      <line x1="12" y1="15" x2="12" y2="3"/>
+    </svg>
+    Convert &amp; Download PDF
+  </button>
+
+  <div class="progress-wrap" id="progressWrap">
+    <div class="progress-label">
+      <span id="progressLabel">Rendering HTML…</span>
+      <span id="progressPct">0%</span>
+    </div>
+    <div class="progress-bar-bg">
+      <div class="progress-bar-fill" id="progressBar"></div>
+    </div>
+  </div>
+
+  <div class="log" id="log"></div>
+
+  <div class="how">
+    <div class="how-step">
+      <div class="how-num">01</div>
+      <div class="how-text">html2canvas renders your page as a high-res image</div>
+    </div>
+    <div class="how-step">
+      <div class="how-num">02</div>
+      <div class="how-text">jsPDF embeds the image and adds PDF link annotations</div>
+    </div>
+    <div class="how-step">
+      <div class="how-num">03</div>
+      <div class="how-text">Every &lt;a&gt; tag maps to a clickable region on the page</div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const { jsPDF } = window.jspdf;
+
+// ── state ──────────────────────────────────────────────────────────────────
+let htmlContent = null;
+let fileName = '';
+
+// ── ui refs ─────────────────────────────────────────────────────────────────
+const fileInput     = document.getElementById('fileInput');
+const dropzone      = document.getElementById('dropzone');
+const fileNameEl    = document.getElementById('fileName');
+const fileNameText  = document.getElementById('fileNameText');
+const convertBtn    = document.getElementById('convertBtn');
+const progressWrap  = document.getElementById('progressWrap');
+const progressBar   = document.getElementById('progressBar');
+const progressLabel = document.getElementById('progressLabel');
+const progressPct   = document.getElementById('progressPct');
+const logEl         = document.getElementById('log');
+
+// ── logging ──────────────────────────────────────────────────────────────────
+function log(msg, type = 'info') {
+  logEl.classList.add('visible');
+  const line = document.createElement('div');
+  line.className = type;
+  line.textContent = `> ${msg}`;
+  logEl.appendChild(line);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+function setProgress(pct, label) {
+  progressBar.style.width = pct + '%';
+  progressPct.textContent = pct + '%';
+  if (label) progressLabel.textContent = label;
+}
+
+// ── file handling ─────────────────────────────────────────────────────────
+function loadFile(file) {
+  if (!file || !file.name.match(/\.html?$/i)) {
+    log('Please select a valid .html file', 'err');
+    return;
+  }
+  fileName = file.name.replace(/\.html?$/i, '');
+  document.getElementById('outputName').placeholder = fileName + '.pdf';
+
+  const reader = new FileReader();
+  reader.onload = e => {
+    htmlContent = e.target.result;
+    fileNameText.textContent = file.name;
+    fileNameEl.classList.add('visible');
+    dropzone.classList.add('has-file');
+    convertBtn.disabled = false;
+    log(`Loaded: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`, 'ok');
+  };
+  reader.readAsText(file);
+}
+
+fileInput.addEventListener('change', e => loadFile(e.target.files[0]));
+
+dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('drag-over'); });
+dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag-over'));
+dropzone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropzone.classList.remove('drag-over');
+  loadFile(e.dataTransfer.files[0]);
+});
+
+// ── PAGE SIZE MAP ─────────────────────────────────────────────────────────
+const PAGE_SIZES = {
+  a4:     [595.28, 841.89],
+  letter: [612,    792],
+  legal:  [612,    1008],
+};
+
+// ── MAIN CONVERSION ───────────────────────────────────────────────────────
+convertBtn.addEventListener('click', async () => {
+  if (!htmlContent) return;
+
+  convertBtn.disabled = true;
+  logEl.innerHTML = '';
+  logEl.classList.add('visible');
+  progressWrap.classList.add('visible');
+  setProgress(0, 'Preparing sandbox…');
+
+  const preserveLinks = document.getElementById('preserveLinks').checked;
+  const detectUrls    = document.getElementById('detectUrls').checked;
+  const newTab        = document.getElementById('newTab').checked;
+  const pageSizeKey   = document.getElementById('pageSize').value;
+  const orientation   = document.getElementById('orientation').value;
+  const scale         = parseInt(document.getElementById('imgScale').value);
+  const outName       = document.getElementById('outputName').value.trim() || (fileName + '.pdf');
+  const finalName     = outName.endsWith('.pdf') ? outName : outName + '.pdf';
+
+  try {
+    // 1. Inject HTML into hidden iframe ────────────────────────────────────
+    log('Creating sandbox iframe…');
+    const iframe = document.createElement('iframe');
+    iframe.style.cssText = 'position:fixed;left:-9999px;top:0;width:8.5in;height:11in;border:none;visibility:hidden;';
+    document.body.appendChild(iframe);
+
+    const iDoc = iframe.contentDocument || iframe.contentWindow.document;
+    iDoc.open();
+    iDoc.write(htmlContent);
+    iDoc.close();
+
+    // Wait for resources to load
+    await new Promise(r => setTimeout(r, 800));
+    setProgress(10, 'Scanning links…');
+
+    // 2. Collect all anchor elements with positions ────────────────────────
+    const iWin  = iframe.contentWindow;
+    const iBody = iDoc.body;
+    const anchors = [];
+
+    if (preserveLinks) {
+      const allLinks = iDoc.querySelectorAll('a[href]');
+      log(`Found ${allLinks.length} anchor tags`);
+
+      allLinks.forEach(a => {
+        const href = a.getAttribute('href');
+        if (!href || href.startsWith('#')) return;
+
+        const rect   = a.getBoundingClientRect
+          ? a.getBoundingClientRect()
+          : { left: 0, top: 0, width: 0, height: 0 };
+        const iRect  = iframe.getBoundingClientRect();
+
+        // Get position relative to the iframe's scroll
+        const scrollY = iWin.scrollY || iDoc.documentElement.scrollTop || 0;
+        const scrollX = iWin.scrollX || iDoc.documentElement.scrollLeft || 0;
+        const domRect = a.getBoundingClientRect();
+
+        // We need absolute position inside the iframe document
+        let el = a;
+        let top = 0, left = 0;
+        while (el && el !== iBody) {
+          top  += el.offsetTop  || 0;
+          left += el.offsetLeft || 0;
+          el    = el.offsetParent;
+        }
+
+        anchors.push({
+          href,
+          x:      left,
+          y:      top,
+          width:  a.offsetWidth  || 10,
+          height: a.offsetHeight || 12,
+        });
+      });
+
+      log(`Mapped ${anchors.length} link positions`, 'ok');
+    }
+
+    // 3. Render to canvas ──────────────────────────────────────────────────
+    setProgress(20, 'Rendering HTML to canvas…');
+    log(`Rendering at ${scale}× scale…`);
+
+    const canvas = await html2canvas(iDoc.body, {
+      scale,
+      useCORS: true,
+      allowTaint: true,
+      logging: false,
+      backgroundColor: '#ffffff',
+      scrollX: 0,
+      scrollY: 0,
+      windowWidth:  iDoc.documentElement.scrollWidth,
+      windowHeight: iDoc.documentElement.scrollHeight,
+    });
+
+    setProgress(65, 'Building PDF…');
+    log('Canvas rendered: ' + canvas.width + '×' + canvas.height + 'px', 'ok');
+
+    // 4. Create PDF ────────────────────────────────────────────────────────
+    const [pw, ph] = PAGE_SIZES[pageSizeKey];
+    const isLandscape = orientation === 'landscape';
+    const pdfW = isLandscape ? ph : pw;
+    const pdfH = isLandscape ? pw : ph;
+
+    const pdf = new jsPDF({
+      orientation,
+      unit: 'pt',
+      format: pageSizeKey,
+    });
+
+    // Image dimensions
+    const imgW = canvas.width;
+    const imgH = canvas.height;
+    const ratio = pdfW / (imgW / scale);  // pts per CSS pixel
+
+    const imgData = canvas.toDataURL('image/jpeg', 0.97);
+    setProgress(75, 'Embedding image…');
+
+    // Handle multi-page
+    const totalPdfHeight = (imgH / scale) * ratio;
+    const pageCount = Math.ceil(totalPdfHeight / pdfH);
+    log(`Pages: ${pageCount}, PDF size: ${pdfW.toFixed(0)}×${pdfH.toFixed(0)}pt`);
+
+    for (let p = 0; p < pageCount; p++) {
+      if (p > 0) pdf.addPage();
+
+      const srcY      = p * pdfH / ratio * scale;
+      const srcHeight = Math.min(pdfH / ratio * scale, imgH - srcY);
+
+      // Slice the canvas for this page
+      const pageCanvas  = document.createElement('canvas');
+      pageCanvas.width  = imgW;
+      pageCanvas.height = srcHeight;
+      const ctx = pageCanvas.getContext('2d');
+      ctx.drawImage(canvas, 0, srcY, imgW, srcHeight, 0, 0, imgW, srcHeight);
+      const pageData = pageCanvas.toDataURL('image/jpeg', 0.97);
+
+      pdf.addImage(pageData, 'JPEG', 0, 0, pdfW, (srcHeight / scale) * ratio);
+      setProgress(75 + Math.round((p + 1) / pageCount * 15), `Rendering page ${p + 1}/${pageCount}…`);
+    }
+
+    // 5. Add link annotations ──────────────────────────────────────────────
+    if (preserveLinks && anchors.length > 0) {
+      setProgress(92, 'Injecting link annotations…');
+
+      anchors.forEach(({ href, x, y, width, height }) => {
+        // Which page does this link land on?
+        const yPt     = y * ratio;
+        const pageIdx = Math.floor(yPt / pdfH);
+        const yOnPage = yPt - pageIdx * pdfH;
+
+        if (pageIdx >= pageCount) return;
+
+        pdf.setPage(pageIdx + 1);
+
+        // jsPDF link annotation
+        pdf.link(
+          x * ratio,
+          yOnPage,
+          width  * ratio,
+          height * ratio,
+          { url: href }
+        );
+      });
+
+      log(`Injected ${anchors.length} clickable link annotations`, 'ok');
+    }
+
+    // 6. Save ──────────────────────────────────────────────────────────────
+    setProgress(98, 'Saving…');
+    pdf.save(finalName);
+
+    setProgress(100, 'Done!');
+    log(`Saved as: ${finalName}`, 'ok');
+
+    // Cleanup
+    document.body.removeChild(iframe);
+
+  } catch (err) {
+    log('Error: ' + err.message, 'err');
+    console.error(err);
+  }
+
+  convertBtn.disabled = false;
+});
+</script>
+</body>
+</html>
