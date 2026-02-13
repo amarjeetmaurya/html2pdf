@@ -1,5 +1,4 @@
 const { jsPDF } = window.jspdf;
-console.log("first")
 // ── state ──────────────────────────────────────────────────────────────────
 let htmlContent = null;
 let fileName = '';
